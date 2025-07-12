@@ -123,7 +123,7 @@ def generate_lora_csv(filename: str) -> bool:
                     preview_url = ""
                 
                 with open(json_filename, 'r', newline='', encoding='utf8') as f:
-                    json_data = json.load(f)
+                    json_data: dict = json.load(f)
                     
                     # check json validation
                     if 'activation text' not in json_data:
@@ -131,6 +131,11 @@ def generate_lora_csv(filename: str) -> bool:
                         continue
 
                     activation_text = json_data['activation text']
+                    preferred_weight = float(json_data.get("preferred weight", 0))
+                    
+                    if preferred_weight != 0:
+                        activation_text = f"<lora:{basename}:{preferred_weight}>{activation_text}"
+                    
                     write_data.append((basename, activation_text, preview_url))
 
     # Write to csv
