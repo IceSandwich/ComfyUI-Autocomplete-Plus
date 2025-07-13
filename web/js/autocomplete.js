@@ -404,13 +404,13 @@ class AutocompleteUI {
         tagRow.classList.add('autocomplete-plus-item', tagData.source);
         tagRow.dataset.tag = tagData.tag;
         tagRow.dataset.tagCategory = categoryText;
-		tagRow.dataset.parse_words = tagData.parse_words;
+        tagRow.dataset.parse_words = tagData.parse_words;
 
         // Tag icon and name
         const tagSourceIconHtml = `<svg class="autocomplete-plus-tag-icon-svg"><use xlink:href="#autocomplete-plus-icon-${tagData.source}"></use></svg>`;
         const tagName = document.createElement('span');
         tagName.className = 'autocomplete-plus-tag-name';
-		let displayTag = tagData.display_tag || tagData.tag;
+        let displayTag = tagData.display_tag || tagData.tag;
         if (settingValues.tagSourceIconPosition == 'hidden') {
             tagName.textContent = displayTag;
         } else {
@@ -429,10 +429,10 @@ class AutocompleteUI {
         alias.className = 'autocomplete-plus-alias';
 
         // Display alias if available
-		if (tagData.source == TagSource.Lora) {
-			alias.textContent = tagData.parse_words;
-			alias.title = tagData.parse_words;
-		} else if (tagData.alias && tagData.alias.length > 0) {
+        if (tagData.source == TagSource.Lora) {
+            alias.textContent = tagData.parse_words;
+            alias.title = tagData.parse_words;
+        } else if (tagData.alias && tagData.alias.length > 0) {
             let aliasText = tagData.alias.join(', ');
             alias.textContent = `${aliasText}`;
             alias.title = tagData.alias.join(', '); // Full alias on hover
