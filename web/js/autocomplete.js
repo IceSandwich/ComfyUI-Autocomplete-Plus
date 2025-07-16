@@ -1,6 +1,7 @@
 import {
     TagCategory,
     TagData,
+    TagSource,
     autoCompleteData,
     getEnabledTagSourceInPriorityOrder
 } from './data.js';
@@ -91,7 +92,7 @@ function searchCompletionCandidates(textareaElement) {
     const addedTags = new Set();
 
     // Generate Hiragana/Katakana variations if applicable
-    const queryVariations = new Set([partialTag, normalizeTagToSearch(partialTag)]);
+    const queryVariations = new Set([partialTag, normalizeTagToSearch(partialTag), partialTag.toLowerCase()]);
     const kataQuery = hiraToKata(partialTag);
     if (kataQuery !== partialTag) {
         queryVariations.add(kataQuery);
@@ -103,7 +104,7 @@ function searchCompletionCandidates(textareaElement) {
 
     const sources = getEnabledTagSourceInPriorityOrder();
     for (const source of sources) {
-        if (settingValues.useFastSearch && autoCompleteData[source].flexSearchIndex) {
+        if (settingValues.useFastSearch && autoCompleteData[source].flexSearchIndex && !partialTag.startsWith("lora:")) {
             const searchResults = autoCompleteData[source].flexSearchIndex.search(partialTag, {
                 limit: settingValues.maxSuggestions * 10,
                 suggest: false,
@@ -223,9 +224,10 @@ function getCurrentPartialTag(inputElement) {
     // Find the last newline or comma before the cursor
     const lastNewLine = text.lastIndexOf('\n', cursorPos - 1);
     const lastComma = text.lastIndexOf(',', cursorPos - 1);
+    const lastPeriod = text.lastIndexOf('.', cursorPos - 1);
 
     // Get the position of the last separator (newline or comma) before cursor
-    const lastSeparator = Math.max(lastNewLine, lastComma);
+    const lastSeparator = Math.max(lastNewLine, lastComma, lastPeriod);
     const start = lastSeparator === -1 ? 0 : lastSeparator + 1;
 
     // Check if the cursor is inside a prompt weight modifier (e.g., :1.2, :.5, :1.)
@@ -269,7 +271,7 @@ function insertTagToTextArea(inputElement, tagToInsert) {
     const replaceStart = Math.min(cursorPos, tagStart);
     let replaceEnd = cursorPos;
 
-    const normalizedTag = normalizeTagToInsert(tagToInsert);
+    const normalizedTag = tagToInsert.parse_words || normalizeTagToInsert(tagToInsert.tag);
 
     const currentTagAfterCursor = text.substring(cursorPos, tagEnd).trimEnd();
     if (normalizedTag.lastIndexOf(currentTagAfterCursor) !== -1) {
@@ -338,7 +340,7 @@ class AutocompleteUI {
         this.tagsList.addEventListener('mousedown', (e) => {
             const row = e.target.closest('.autocomplete-plus-item');
             if (row && row.dataset.tag) {
-                this.#insertTag(row.dataset.tag);
+                this.#insertTag(row.dataset);
                 e.preventDefault(); // Prevent focus loss from input
                 e.stopPropagation();
             }
@@ -406,7 +408,7 @@ class AutocompleteUI {
     /** Selects the currently highlighted item */
     getSelectedTag() {
         if (this.selectedIndex >= 0 && this.selectedIndex < this.candidates.length) {
-            return this.candidates[this.selectedIndex].tag;
+            return this.candidates[this.selectedIndex];
         }
 
         return null; // No valid selection
@@ -444,17 +446,19 @@ class AutocompleteUI {
         tagRow.classList.add('autocomplete-plus-item', tagData.source);
         tagRow.dataset.tag = tagData.tag;
         tagRow.dataset.tagCategory = categoryText;
+        tagRow.dataset.parse_words = tagData.parse_words;
 
         // Tag icon and name
         const tagSourceIconHtml = `<svg class="autocomplete-plus-tag-icon-svg"><use xlink:href="#autocomplete-plus-icon-${tagData.source}"></use></svg>`;
         const tagName = document.createElement('span');
         tagName.className = 'autocomplete-plus-tag-name';
+        let displayTag = tagData.display_tag || tagData.tag;
         if (settingValues.tagSourceIconPosition == 'hidden') {
-            tagName.textContent = tagData.tag;
+            tagName.textContent = displayTag;
         } else {
             tagName.innerHTML = settingValues.tagSourceIconPosition == 'left'
-                ? `${tagSourceIconHtml} ${tagData.tag}`
-                : `${tagData.tag} ${tagSourceIconHtml}`;
+                ? `${tagSourceIconHtml} ${displayTag}`
+                : `${displayTag} ${tagSourceIconHtml}`;
         }
 
         // grayout tag name if it already exists
@@ -467,7 +471,10 @@ class AutocompleteUI {
         alias.className = 'autocomplete-plus-alias';
 
         // Display alias if available
-        if (tagData.alias && tagData.alias.length > 0) {
+        if (tagData.source == TagSource.Lora) {
+            alias.textContent = tagData.parse_words;
+            alias.title = tagData.parse_words;
+        } else if (tagData.alias && tagData.alias.length > 0) {
             let aliasText = tagData.alias.join(', ');
             alias.textContent = `${aliasText}`;
             alias.title = tagData.alias.join(', '); // Full alias on hover
@@ -598,7 +605,7 @@ class AutocompleteUI {
      * @param {string} selectedTag The tag to insert.
      */
     #insertTag(selectedTag) {
-        if (!this.target || !selectedTag || selectedTag.length <= 0) {
+        if (!this.target || !selectedTag.tag || selectedTag.tag.length <= 0) {
             this.hide();
             return;
         }

@@ -7,6 +7,7 @@ import { settingValues } from "./settings.js";
 export const TagSource = {
     Danbooru: 'danbooru',
     E621: 'e621',
+    Lora: 'lora',
 }
 
 export const TagCategory = {
@@ -28,6 +29,9 @@ export const TagCategory = {
         'invalid',
         'meta',
         'lore',
+    ],
+    'lora': [
+        'lora'
     ]
 }
 
@@ -59,6 +63,15 @@ export class TagData {
         this.count = count;
 
         this.source = source;
+
+        /* Display this tag in the UI. If it's not set, use this.tag instead */
+        this.display_tag = "";
+
+        /* Insert this when user hit enter. If it's not set, use this.tag instead */
+        this.parse_words = "";
+
+        /* The url to the tag's preview image */
+        this.preview_url = "";
     }
 }
 
@@ -146,7 +159,26 @@ async function loadTags(csvUrl, siteName) {
             const line = lines[i];
             const columns = parseCSVLine(line);
 
-            if (columns.length === TAGS_CSV_HEADER_COLUMNS.length) {
+            if (columns.length === 3 && siteName === TagSource.Lora) {
+                const lora_name = columns[0].trim();
+                const activation_words = columns[1].trim();
+                const preview_img_url = columns[2].trim();
+
+                if (!lora_name || !activation_words) continue;
+
+                // Skip if tag already exists (priority to earlier loaded files - extra then base)
+                if (autoCompleteData[siteName].tagMap.has(lora_name)) {
+                    continue;
+                }
+
+                // Add leader word `lora:` in search
+                const tagData = new TagData("lora:" + lora_name.toLowerCase(), [], "0", 1, siteName);
+                tagData.display_tag = lora_name;
+                tagData.parse_words = activation_words;
+                tagData.preview_url = preview_img_url;
+
+                autoCompleteData[siteName].sortedTags.push(tagData);
+            } else if (columns.length === TAGS_CSV_HEADER_COLUMNS.length) {
                 const tag = columns[TAG_INDEX].trim();
                 const aliasStr = columns[ALIAS_INDEX].trim();
                 const category = columns[CATEGORY_INDEX].trim();

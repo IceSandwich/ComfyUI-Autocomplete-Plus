@@ -39,6 +39,7 @@ DEFAULT_CSV_METADATA = {
             ],
         }
     ],
+    "lora_search_path": []
 }
 
 # --- HuggingFace Constants ---
@@ -77,7 +78,7 @@ class Downloader:
         """Returns the default CSV metadata."""
         return json.loads(json.dumps(DEFAULT_CSV_METADATA))
 
-    def _load_metadata(self) -> list:
+    def _load_metadata(self) -> dict:
         """Loads metadata from CSV_META_FILE. Returns default if not found or error."""
         default_metadata = self.get_default_csv_metadata()
 

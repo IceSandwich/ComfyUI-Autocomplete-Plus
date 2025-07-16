@@ -1,5 +1,6 @@
 import os
 import json
+import csv
 import server
 from aiohttp import web
 from . import downloader as dl
@@ -12,6 +13,7 @@ DATA_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "data"
 
 DANBOORU_PREFIX = "danbooru"
 E621_PREFIX = "e621"
+LORA_PREFIX = "lora"
 
 TAGS_SUFFIX = "tags"
 COOCCURRENCE_SUFFIX = "tags_cooccurrence"
@@ -92,6 +94,58 @@ def get_last_check_time_from_metadata():
         return None
 
 
+def generate_lora_csv(filename: str) -> bool:
+    """
+    Generate the CSV from the LORA search path.
+    Return False if no LORA search path defined in meta file.
+    """
+    lora_config: list[str] = dl.Downloader()._load_metadata().get("lora_search_path", [])
+    # lora_name, activation words, preview img url
+    write_data: list[tuple[str, str, str]] = []
+
+    if len(lora_config) == 0:
+        return False
+
+    for lora_path in lora_config:
+        if not os.path.exists(lora_path):
+            print(f"[Autocomplete-Plus] Warning: Cannot find lora path: {lora_path}")
+            continue
+
+        # Walk for .json file
+        for root, dirs, files in os.walk(lora_path):
+            for file in [ x for x in files if x.endswith('.json') ]:
+                json_filename = os.path.join(root, file)
+                basename = os.path.splitext(file)[0]
+
+                # determine the preview image location
+                preview_url = os.path.join(root, basename + '.png')
+                if not os.path.exists(preview_url):
+                    preview_url = ""
+                
+                with open(json_filename, 'r', newline='', encoding='utf8') as f:
+                    json_data: dict = json.load(f)
+                    
+                    # check json validation
+                    if 'activation text' not in json_data:
+                        print(f"[Autocomplete-Plus] Warning: Cannot find activation text in lora: {json_filename}")  
+                        continue
+
+                    activation_text = json_data['activation text']
+                    preferred_weight = float(json_data.get("preferred weight", 0))
+                    
+                    if preferred_weight != 0:
+                        activation_text = f"<lora:{basename}:{preferred_weight}>{activation_text}"
+                    
+                    write_data.append((basename, activation_text, preview_url))
+
+    # Write to csv
+    with open(filename,  "w", encoding='utf8') as f:
+        writer = csv.writer(f)
+        writer.writerows(write_data)
+
+    print(f"[Autocomplete-Plus] Successfully wrote {filename}")
+    return True
+
 # --- API Endpoints ---
 
 
@@ -119,6 +173,11 @@ async def get_csv_list(_request):
         },
     }
 
+    if generate_lora_csv(os.path.join(DATA_DIR, f"{LORA_PREFIX}_{TAGS_SUFFIX}.csv")):
+        response[LORA_PREFIX] = {
+            "base_tags": True
+        }
+
     # Print csv file status to the console for debugging
     print(f"""[Autocomplete-Plus] CSV file status:
   * Danbooru -> base: {response[DANBOORU_PREFIX]["base_tags"]}, extra: [{", ".join(response[DANBOORU_PREFIX]["extra_tags"])}]
@@ -134,7 +193,7 @@ async def get_base_tags_file(request):
     """
     source = str(request.match_info["source"])
     suffix = str(request.match_info["suffix"])
-    if source not in [DANBOORU_PREFIX, E621_PREFIX] or suffix not in [
+    if source not in [DANBOORU_PREFIX, E621_PREFIX, LORA_PREFIX] or suffix not in [
         TAGS_SUFFIX,
         COOCCURRENCE_SUFFIX,
     ]:
